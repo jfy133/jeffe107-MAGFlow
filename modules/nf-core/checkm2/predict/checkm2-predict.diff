@@ -1,4 +1,5 @@
-Changes in module 'nf-core/checkm2/predict'
+Changes in component 'nf-core/checkm2/predict'
+Changes in 'checkm2/predict/meta.yml':
 --- modules/nf-core/checkm2/predict/meta.yml
 +++ modules/nf-core/checkm2/predict/meta.yml
 @@ -18,42 +18,30 @@
@@ -30,7 +31,7 @@ Changes in module 'nf-core/checkm2/predict'
 +      type: directory
 +      description: Path where the files containing nucleic acid sequence file in FASTA format "*.{fasta,fna,fa}".
 +      pattern: 
-+  - changed_dot_for_underscore:
++  - change_dot_for_underscore:
 +      type: string
 +      description: Output from the process CHANGE_DOT_FOR_UNDERSCORE indicating that dots were removed from the file name.
 +  - gtdbtk2_db:
@@ -64,33 +65,34 @@ Changes in module 'nf-core/checkm2/predict'
  authors:
    - "@dialvarezs"
 
+Changes in 'checkm2/predict/main.nf':
 --- modules/nf-core/checkm2/predict/main.nf
 +++ modules/nf-core/checkm2/predict/main.nf
-@@ -1,41 +1,44 @@
+@@ -1,52 +1,39 @@
 -process CHECKM2_PREDICT {
 -    tag "${meta.id}"
 -    label 'process_medium'
 +process CHECKM2 {
-+	tag "$sample"
++	tag "${sample}"
 +	label 'process_medium'
  
 -    conda "bioconda::checkm2=1.0.1"
 -    container "${ workflow.containerEngine == 'singularity' && !task.ext.singularity_pull_docker_container ?
 -        'https://depot.galaxyproject.org/singularity/checkm2:1.0.1--pyh7cba7a3_0':
 -        'biocontainers/checkm2:1.0.1--pyh7cba7a3_0' }"
-+        conda "bioconda::checkm2=1.0.1 conda-forge::python=3.7.12"
-+	container "${ params.use_singularity ?
-+            'https://depot.galaxyproject.org/singularity/checkm2:1.0.1--pyh7cba7a3_0' :
-+            'biocontainers/checkm2:1.0.1--pyh7cba7a3_0' }"
-+	containerOptions "${ params.directory_to_bind == null ? '' : "--bind ${params.directory_to_bind}" }"
++	conda "bioconda::checkm2=1.0.1 conda-forge::python=3.7.12"
++	container "${params.use_singularity
++		? 'https://depot.galaxyproject.org/singularity/checkm2:1.0.1--pyh7cba7a3_0'
++		: 'biocontainers/checkm2:1.0.1--pyh7cba7a3_0'}"
++	containerOptions "${params.directory_to_bind == null ? '' : "--bind ${params.directory_to_bind}"}"
  
 -    input:
 -    tuple val(meta), path(fasta, stageAs: "input_bins/*")
 -    tuple val(dbmeta), path(db)
 +	input:
 +	tuple val(sample), path(files), val(change_dot_for_underscore)
-+	val "checkm2_db"
-+	val "gtdbtk2_db"
++	path checkm2_db
++	path gtdbtk2_db
  
 -    output:
 -    tuple val(meta), path("${prefix}")                   , emit: checkm2_output
@@ -104,19 +106,18 @@ Changes in module 'nf-core/checkm2/predict'
 -    task.ext.when == null || task.ext.when
 +	script:
 +	def outdir = params.outdir
-+	def checkm2_db = params.checkm2_db ? 
-+				"--database_path ${params.checkm2_db}" :
-+				"--database_path ${params.outdir}/databases/CheckM2_database/uniref100.KO.1.dmnd"
++		? "--database_path ${params.checkm2_db}"
++		: "--database_path ${params.outdir}/databases/CheckM2_database/uniref100.KO.1.dmnd"
 +	def args = task.ext.args ?: ''
 +	"""
 +	EXTENSION=\$(echo ".\$(ls ${files}/* | head -n 1 | rev | cut -d. -f1 | rev)")
 +	checkm2 predict \
-+        --threads $task.cpus \
-+        --input $files -x \$EXTENSION \
++        --threads ${task.cpus} \
++        --input ${files} -x \$EXTENSION \
 +        --output-directory checkm2 \
-+	$checkm2_db \
-+	--tmpdir "${outdir}/${sample}" \
-+	$args
++		--database_path ${checkm2_db} \
++		--tmpdir "${outdir}/${sample}" \
++		${args}
  
 -    script:
 -    def args = task.ext.args ?: ''
@@ -135,14 +136,26 @@ Changes in module 'nf-core/checkm2/predict'
 -        checkm2: \$(checkm2 --version)
 -    END_VERSIONS
 -    """
+-
+-    stub:
+-    def args = task.ext.args ?: ''
+-    prefix = task.ext.prefix ?: "${meta.id}"
+-    """
+-    mkdir -p ${prefix}/diamond_output ${prefix}/protein_files
+-    touch ${prefix}/quality_report.tsv ${prefix}/checkm2.log
+-
+-    cat <<-END_VERSIONS > versions.yml
+-    "${task.process}":
+-        checkm2: \$(checkm2 --version)
+-    END_VERSIONS
+-    """
 +	cat <<-END_VERSIONS > versions.yml
-+	"${task.process}":
 +		checkm2: \$(checkm2 --version)
 +	END_VERSIONS
 +	"""
-+}
- 
-     stub:
-     def args = task.ext.args ?: ''
+ }
 
+'modules/nf-core/checkm2/predict/tests/main.nf.test' is unchanged
+'modules/nf-core/checkm2/predict/tests/tags.yml' is unchanged
+'modules/nf-core/checkm2/predict/tests/main.nf.test.snap' is unchanged
 ************************************************************

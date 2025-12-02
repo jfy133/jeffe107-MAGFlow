@@ -37,7 +37,7 @@ include { REMOVE_TMP			            }	from '../modules/local/removetmp.nf'
 
 workflow MAGFlow {
 		// Input channels
-                
+
 		if(params.files){
 		    files_ch = Channel.fromPath( params.files, type: 'dir').map {tuple(it.baseName,it )}
 		} else {
@@ -47,33 +47,36 @@ workflow MAGFlow {
 		}
 
 		// Workflow including different tools
-		
+
 		ch_versions = Channel.empty()
 
 		decompress_ch = DECOMPRESS(files_ch)
-		
+
 		empty_bins_ch = EMPTY_BINS(decompress_ch)
 
 		change_dot_for_underscore_ch = CHANGE_DOT_FOR_UNDERSCORE(empty_bins_ch)
 
 		if(params.run_gtdbtk2){
-		    gtdbtk2_db_ch = GTDBTK2_DB()
-                } else {
-                    gtdbtk2_db_ch = []
-                }
-		
+            if ( params.gtdbtk2_db ) {
+                gtdbtk2_db_ch = file(params.gtdbtk2_db, checkIfExists: true)
+            } else {
+		        gtdbtk2_db_ch = GTDBTK2_DB()
+            }
+        }
+
 		busco_ch = Channel.empty()
 		BUSCO(change_dot_for_underscore_ch, gtdbtk2_db_ch)
 		busco_ch = busco_ch.mix(BUSCO.out.busco.collect { it } )
-		busco_ch = busco_ch.first()                
+		busco_ch = busco_ch.first()
 		ch_versions = ch_versions.mix(BUSCO.out.versions.first())
 
-
-                if(!params.checkm2_db){
-		    checkm2_db_ch = CHECKM2_DB()
-                } else {
-                    checkm2_db_ch = []
-                }
+		if(params.run_checkm2){
+            if ( params.checkm2_db ) {
+                checkm2_db_ch = file(params.checkm2_db, checkIfExists: true)
+            } else {
+		        checkm2_db_ch = CHECKM2_DB()
+            }
+        }
 
 		checkm2_ch = Channel.empty()
 		CHECKM2(change_dot_for_underscore_ch, checkm2_db_ch, gtdbtk2_db_ch)
@@ -81,21 +84,21 @@ workflow MAGFlow {
 		checkm2_ch = checkm2_ch.first()
 		ch_versions = ch_versions.mix(CHECKM2.out.versions.first())
 
-                if(params.gtdbtk2_db || params.run_gtdbtk2){
+        if(params.gtdbtk2_db || params.run_gtdbtk2){
 		    gtdbtk2_ch = Channel.empty()
-                    GTDBTK2(change_dot_for_underscore_ch, gtdbtk2_db_ch)
+            GTDBTK2(change_dot_for_underscore_ch, gtdbtk2_db_ch)
 		    gtdbtk2_ch = gtdbtk2_ch.mix(GTDBTK2.out.gtdbtk2.collect { it } )
 		    gtdbtk2_ch = gtdbtk2_ch.first()
 		    ch_versions = ch_versions.mix(GTDBTK2.out.versions.first())
-                } else {
-                    gtdbtk2_ch = []
-                }
-                           
-                if(!params.gunc_db){
-		    gunc_db_ch = GUNC_DB()
-                } else {
-                    gunc_db_ch = []
-                }
+        } else {
+            gtdbtk2_ch = []
+        }
+
+        if ( params.gunc_db ) {
+            gunc_db_ch = file(params.gunc_db, checkIfExists: true)
+        } else {
+            gunc_db_ch = GUNC_DB()
+        }
 
 		gunc_ch = Channel.empty()
 		GUNC(change_dot_for_underscore_ch, gunc_db_ch, gtdbtk2_db_ch)
@@ -107,14 +110,14 @@ workflow MAGFlow {
                 QUAST(change_dot_for_underscore_ch, gtdbtk2_db_ch)
 		quast_ch = quast_ch.mix(QUAST.out.quast.collect { it } )
 		quast_ch = quast_ch.first()
-		ch_versions = ch_versions.mix(QUAST.out.versions.first())		
+		ch_versions = ch_versions.mix(QUAST.out.versions.first())
 
 		// Final processing of the outputs
                 concat_dfs_ch = CONCAT_DFS(change_dot_for_underscore_ch, checkm2_ch, busco_ch, gunc_ch, quast_ch, gtdbtk2_ch).collect()
 		final_df_ch = FINAL_DF(concat_dfs_ch)
 
                 REMOVE_TMP(change_dot_for_underscore_ch, final_df_ch)
-		
+
 		// Collate and save software versions
 
 		softwareVersionsToYAML(ch_versions)
