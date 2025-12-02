@@ -15,17 +15,20 @@ process CHECKM2 {
 
 	output:
 	path "checkm2", emit: checkm2
+	path "tmp_dir", emit: tmp_dir
 	path "versions.yml", emit: versions
 
 	script:
 	def args = task.ext.args ?: ''
 	"""
 	EXTENSION=\$(echo ".\$(ls ${files}/* | head -n 1 | rev | cut -d. -f1 | rev)")
+	mkdir tmp_dir
 	checkm2 predict \
         --threads ${task.cpus} \
         --input ${files} -x \$EXTENSION \
         --output-directory checkm2 \
 		--database_path ${checkm2_db} \
+		--tmpdir tmp_dir/ \
 		${args}
 
 	cat <<-END_VERSIONS > versions.yml
